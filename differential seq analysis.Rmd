@@ -1,0 +1,173 @@
+---
+title: "bulk_rna_seq analysis"
+author: "Teena.Dodeja"
+date: "2023-11-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+getwd()
+```
+
+## bulk RNA -seq analysis of the data in paper `(Single-cell transcriptomics identifies an effectorness gradient shaping the response of CD4+ T cells to cytokines)`
+
+```{r}
+library(DESeq2)
+library(tidyverse)
+
+library(vsn)
+
+## loading the read count data
+ge_matrix <- read.table("1_NCOMMS-19-7936188_bulk_RNAseq_raw_counts.txt.gz", header = T, sep = "\t")
+
+dim(ge_matrix)
+
+# check the dataframe
+ge_matrix[1:10, 1:6]
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# loading the metadata
+md_matrix <- read.table("1_NCOMMS-19-7936188_bulk_RNAseq_metadata.txt.gz",
+                        header = T, stringsAsFactors = T, sep = "\t")
+
+
+
+md_matrix[1:10, 1:6]
+
+```
+## setting rowname of the metadata sa sample id
+
+```{r}
+rownames(md_matrix) <- md_matrix$sample_id
+
+head(md_matrix, 10)
+
+dim(md_matrix)
+```
+
+## sanity check to see if the rownames of metadat match the column names of the count matrix
+
+```{r}
+rownames(md_matrix) == colnames(ge_matrix)
+```
+## selecting sample corresponding the cell type and treatment using metadata, here it is CD4+ Memory cells after 5 days of trt vs control
+
+```{r}
+stim_time <- "5d" # stimulation time
+conditions <- c("Th2", "Th0") # cytokine condition
+celltype <- "CD4_Memory" # cell type
+```
+
+## selecting the corresponding data based on the set conditions for stimulation time i.e. 5 days, cell type and cytokine conditions
+
+```{r}
+
+toSelect <- md_matrix %>% 
+  select(stimulation_time, cytokine_condition, cell_type) %>% 
+  filter(stimulation_time==stim_time & cytokine_condition %in% conditions  & cell_type==celltype)
+
+indices <- rownames(toSelect)
+
+indices
+
+md_matrix_subset <- md_matrix[indices,]
+
+
+ge_matrix_subset <- ge_matrix[, indices]
+```
+
+# other way to do this
+```{r}
+to_selct <- md_matrix$stimulation_time==stim_time &
+  md_matrix$cytokine_condition %in% conditions &
+  md_matrix$cell_type==celltype
+
+to_selct
+```
+## creating DEseq2 object
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = ge_matrix_subset,
+                              colData = md_matrix_subset,
+                              design = ~cytokine_condition)
+```
+## filtering out genes with low count
+
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+
+dds <- dds[keep,]
+
+dds
+```
+
+## undestanding the variability in the data with or without rlog transformations
+
+```{r}
+norm_fd <- normTransform(dds)
+
+norm_fd
+
+meanSdPlot(assay(norm_fd))
+```
+## variance with rlog tranfrormation
+
+```{r}
+rl_fd <- rlog(dds, blind = F)
+
+meanSdPlot(assay(rl_fd))
+```
+
+## normalization for differnt sequencing depth between the samples
+
+```{r}
+dds <- estimateSizeFactors(dds)
+
+sizeFactors(dds)
+```
+
+```{r}
+plot(sizeFactors(dds), colSums(counts(dds)))
+```
+
+
+```{r}
+hist(ge_matrix$I0726)
+```
+## Pca 
+
+```{r}
+
+check <- t(assay(rl_fd))
+
+check
+dim(t(assay(rl_fd)))
+
+rl_df <- prcomp(t(assay(rl_fd)), scale. = T)
+
+plot(rl_df)
+```
+
+## getting differentially expressed genes
+```{r}
+dds_e <- DESeq(dds)
+
+res <- results(dds_e)
+
+
+dim(res)
+
+check <- sum(res$padj <= 0.01 & abs(res$log2FoldChange) >= 1,  na.rm = T)
+
+check
+```
+
