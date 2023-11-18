@@ -19,6 +19,7 @@ library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(pheatmap)
+library(annotables)
 
 
 ## loading the cout matrix
@@ -150,5 +151,65 @@ ggplot(highExp, aes(log2(baseMean), log2FoldChange, color=sig)) + geom_point() +
 ggplot(highExp, aes(log2FoldChange, -log10(padj) , color=sig)) + geom_point() + theme_dark() + xlim(c(-4, 4))
 
 
+```
+
+
+#$ filtering results with significantly expressed genes and creating  aheat map
+
+```{r}
+de_sig <- subset(highExp, padj <= 0.05)
+
+dim(de_sig)
+
+head(de_sig)
+
+index <- rownames(de_sig)
+
+index
+## getting reads with significant padj
+normCounts <- normCounts[index,]
+
+head(normCounts)
+
+# getting the heatmap
+
+pheatmap(log2(normCounts + 1), scale = "row")
+
+```
+
+## expoting the gene file with read count for pathway analysis
+
+```{r}
+write.csv(normCounts, "dge_genes.csv")
+
+head(normCounts)
+```
+
+```{r}
+head(normCounts)
+
+head(de_sig)
+
+
+ens_sig <- merge(normCounts[,1:2], de_sig[,c("log2FoldChange", "padj")], by="row.names")
+
+
+head(ens_sig)
+```
+
+## getting the gene names uisng ensemble id for doenstream pathway analysis
+
+```{r}
+ens_sig <- ens_sig %>% rename("ensgene" = "Row.names")
+
+gene_data <- grch38 %>% filter(ensgene %in% ens_sig$ensgene)
+colnames(ens_sig)
+colnames(gene_data)
+gene_df <- merge(ens_sig, gene_data, by="ensgene")
+
+gene_df
+
+
+write.csv(gene_df, "gene_df.csv")
 ```
 
