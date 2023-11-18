@@ -1,0 +1,154 @@
+---
+title: "deg_analysis"
+author: "Teena.Dodeja"
+date: "2023-11-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+### steps of DEseq analysis as per the paper
+```{r}
+library(DESeq2)
+library(apeglm)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(pheatmap)
+
+
+## loading the cout matrix
+cell_df <- read.table("1_NCOMMS-19-7936188_bulk_RNAseq_raw_counts.txt.gz", header = T, sep = "\t", row.names = 1)
+
+head(cell_df)
+
+colnames(cell_df)
+
+dim(cell_df)
+
+md_df <- read.table("1_NCOMMS-19-7936188_bulk_RNAseq_metadata.txt.gz", header = T, sep="\t", stringsAsFactors = T)
+
+rownames(md_df) = md_df$sample_id
+
+rownames(md_df)
+
+md_df = md_df[complete.cases(md_df), ]
+
+cell_df = cell_df[, rownames(md_df)]
+
+
+colnames(cell_df) == rownames(md_df)
+
+
+```
+## creating deseq dataset fro matrix
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = cell_df,
+                              colData = md_df,
+                              design = ~cell_type)
+```
+
+
+
+## exploring dds
+```{r}
+head(counts(dds))
+
+
+## remove lowly expressed genes
+keep <- rowSums(counts(dds)) >= 10
+
+dds <- dds[keep,]
+
+dim(counts(dds))
+
+## running deseq on dds dataset
+ddsDE <- DESeq(dds)
+
+
+
+```
+```{r}
+
+# getting normalized read counts
+
+normCounts <- counts(ddsDE, normalize = T )
+
+
+write.csv(normCounts, "gene_normCount.csv") # for downstream analysis
+
+head(normCounts)
+
+
+## getting results from deseq, with default alpha 
+
+res <- results(ddsDE)
+
+class(res)
+
+
+# checking the summary
+summary(res)
+
+
+
+## filtering highly expressed genes, ordering based on padjusted value I want low padjusted
+
+highExp <- res[order(res$padj),]
+
+
+highExp<- data.frame(highExp)
+
+highExp <- na.omit(highExp)
+
+
+
+head(highExp)
+# checking our condition of comparison
+resultsNames(ddsDE)
+
+# its comaprison of gene expression in naive CD4 to memory CD4
+
+
+# filterinh highly expressed genes
+sum(highExp$padj < 0.01 & highExp$log2FoldChange >4, na.rm = T)
+
+
+## plotting the results
+plotMA(ddsDE, ylim = c(-5, 5))
+```
+
+## plotting the results 
+
+```{r}
+
+# adding a column to the table that can be used in plots
+highExp$sig <- ifelse(highExp$padj <= 0.01, "yes", "no")
+
+
+# results of deseq
+head(highExp)
+
+# normalized read counts
+head(normCounts)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# plotting the mean and log2 fold change (like plotMA)
+ggplot(highExp, aes(log2(baseMean), log2FoldChange, color=sig)) + geom_point() + theme_bw() + ylim(c(-4, 4))
+
+
+
+## volcano plot
+
+ggplot(highExp, aes(log2FoldChange, -log10(padj) , color=sig)) + geom_point() + theme_dark() + xlim(c(-4, 4))
+
+
+```
+
