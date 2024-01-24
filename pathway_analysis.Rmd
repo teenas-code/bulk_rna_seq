@@ -10,21 +10,77 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## R Markdown
+## packages to get the gene id mappings
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+library(biomaRt)
+library(annotables)
+library(org.Hs.eg.db)
+library(EnsDb.Hsapiens.v86)
+library(tidyverse)
+library(dplyr)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+gene_df <- read.csv("dge_genes.csv", row.names = 1)
+
+head(gene_df)
+
+# getting first gene ids(it had low padj) from the data
+gene_5id <- rownames(gene_df[1:5,])
+
+gene_5id
+
+
+## getting gene id from ensemble number using biomart
+# choosing the dataset
+listEnsembl()
+
+# selecting the dataset from the list
+ens_bl <- useEnsembl(biomart = "genes")
+
+# choosing daraset
+data_set <- listDatasets(ens_bl)
+
+# searching for human dataset
+
+ens_gene <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# building query
+
+attr <- listAttributes(ens_gene)
+filters <- listFilters(ens_gene)
+getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
+      filters = "ensembl_gene_id",
+      values = gene_5id,
+      mart =ens_gene)
+
+
+```
+## another method to get gene id is using annnotables package
+```{r}
+# filtering human genome data using pipe only using our ids with annotables
+
+grch38 %>% 
+  filter(ensgene %in% gene_5id)
+
+
+```
+## other method is using annotation DBs function
+
+```{r}
+
+keytypes(org.Hs.eg.db) # checking the key type
+columns(org.Hs.eg.db)
+
+mapIds(org.Hs.eg.db, keys = gene_5id, keytype = "ENSEMBL", column = "SYMBOL")
+
+
+keytypes(EnsDb.Hsapiens.v86)
+columns(EnsDb.Hsapiens.v86)
+mapIds(EnsDb.Hsapiens.v86, keys = gene_5id, keytype = "GENEID", column = "SYMBOL")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
