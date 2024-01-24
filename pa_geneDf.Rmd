@@ -11,20 +11,78 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## loading the required libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(enrichR)
+library(pathview)
+library(org.Hs.eg.db)
+library(here)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+
+
+## pathway analsis of the genes in gene_df file
+
+```{r}
+gene_df <- read.csv("gene_df.csv")
+
+head(gene_df)
+
+glimpse(gene_df)
+
+
+```
+## pathway analysis with enrichR package
+```{r}
+# checking the functions in enrichR package
+lsf.str("package:enrichR")
+
+## getting the list of all the DBs in enrichR package
+dbs <- listEnrichrDbs()
+
+# selecting the daatbase from the list of dbs
+databases <- c("KEGG_2019_Human", "GO_Molecular_Function_2018", "GO_Biological_Process_2018")
+
+# filtering the genes woth high log2 fold change
+up_gene_name <- gene_df %>% 
+  filter(log2FoldChange > 4) %>%
+  filter(padj < 0.001) %>% 
+  pull(symbol)
+
+up_gene_name
+
+## running the enrichR function using the filtered genes and the datbase selected from the list of databases
+
+enriched_genes <- enrichr(up_gene_name, databases)
+
+enriched_genes
+
+head(enriched_genes["KEGG_2019_Human"])
+
+```
+## visualizing the pathway
+
+```{r}
+gene_view <- gene_df %>% 
+  filter(log2FoldChange > 3) %>% 
+  filter(padj < 0.001) %>%
+  mutate(symbol = mapIds(org.Hs.eg.db, symbol, "ENTREZID", "SYMBOL")) %>% 
+  drop_na() %>% 
+  distinct(symbol, .keep_all = T)
+
+gene_view
+
+
+
+## pathview function
+pathview(gene.data = gene_view[,c("log2FoldChange", "symbol")],
+         pathway.id = "05161", species = "hsa", out.suffix = "gene_view_path", kegg.native = T)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
